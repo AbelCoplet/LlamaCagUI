@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Simple document processor for LlamaCagUI
-# This version uses a streamlined approach that will work with any llama.cpp version
+# Fixed document processor for LlamaCagUI that focuses on reliability
+# This script prepares documents for context augmentation
 
 # Check if we have the required arguments
 if [ "$#" -lt 3 ]; then
@@ -17,58 +17,77 @@ CONTEXT_SIZE="${4:-128000}"
 THREADS="${5:-4}"
 BATCH_SIZE="${6:-1024}"
 
-# Define directories for logging
-LOGS_DIR="$HOME/.llamacag/logs"
-mkdir -p "$LOGS_DIR"
-mkdir -p "$(dirname "$CACHE_PATH")"
-
-# Generate a timestamp for the log file
-TIMESTAMP=$(date +"%Y%m%d%H%M%S")
-LOG_FILE="$LOGS_DIR/document_process_${TIMESTAMP}.log"
+# Define log file
+LOG_DIR="$HOME/.llamacag/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/create_cache_$(date +%Y%m%d_%H%M%S).log"
 
 # Log start of the process
-echo "$(date): Processing document: $DOCUMENT_PATH" | tee -a "$LOG_FILE"
-echo "$(date): Using model: $MODEL_PATH" | tee -a "$LOG_FILE"
-echo "$(date): Cache will be saved as: $CACHE_PATH" | tee -a "$LOG_FILE"
+echo "Starting document processing at $(date)" > "$LOG_FILE"
+echo "Model: $MODEL_PATH" >> "$LOG_FILE"
+echo "Document: $DOCUMENT_PATH" >> "$LOG_FILE"
+echo "Cache path: $CACHE_PATH" >> "$LOG_FILE"
+echo "Context size: $CONTEXT_SIZE tokens" >> "$LOG_FILE"
 
-# Find llama.cpp binary
-LLAMACPP_DIR=$(dirname $(dirname "$MODEL_PATH"))
-if [ -f "$LLAMACPP_DIR/build/bin/llama-cli" ]; then
-    LLAMA_BIN="$LLAMACPP_DIR/build/bin/llama-cli"
-elif [ -f "$LLAMACPP_DIR/build/bin/main" ]; then
-    LLAMA_BIN="$LLAMACPP_DIR/build/bin/main"
-else
-    echo "Error: llama.cpp binary not found in $LLAMACPP_DIR/build/bin/" | tee -a "$LOG_FILE"
-    exit 1
-fi
+# Create cache directory
+mkdir -p "$(dirname "$CACHE_PATH")"
 
-echo "$(date): Using llama.cpp binary: $LLAMA_BIN" | tee -a "$LOG_FILE"
-
-# Process document content and store it in the cache
+# Process document
 if [ -f "$DOCUMENT_PATH" ]; then
-    # Create the JSON metadata file
+    # Get file info
+    FILE_SIZE=$(wc -c < "$DOCUMENT_PATH")
+    FILE_EXT="${DOCUMENT_PATH##*.}"
+    
+    echo "File size: $FILE_SIZE bytes" >> "$LOG_FILE"
+    echo "File type: $FILE_EXT" >> "$LOG_FILE"
+    
+    # Simple token estimation (rough approximation)
+    TOKEN_ESTIMATE=$(($FILE_SIZE / 4))
+    echo "Estimated tokens: $TOKEN_ESTIMATE" >> "$LOG_FILE"
+    
+    # For large documents, create a trimmed version
+    if [ "$TOKEN_ESTIMATE" -gt "$CONTEXT_SIZE" ]; then
+        echo "Document may exceed context window, trimming" >> "$LOG_FILE"
+        
+        # Calculate approximate byte limit
+        BYTE_LIMIT=$(($CONTEXT_SIZE * 4))
+        
+        # Create truncated version
+        echo "Truncating to approximately $BYTE_LIMIT bytes" >> "$LOG_FILE"
+        head -c "$BYTE_LIMIT" "$DOCUMENT_PATH" > "$CACHE_PATH"
+    else
+        # Document fits in context window, copy it directly
+        echo "Document should fit in context window" >> "$LOG_FILE"
+        cp "$DOCUMENT_PATH" "$CACHE_PATH"
+    fi
+    
+    # Create metadata file
     cat > "$CACHE_PATH.json" << EOF
 {
     "model_path": "$MODEL_PATH",
     "document_path": "$DOCUMENT_PATH",
-    "document_content": "$(head -c 1000 "$DOCUMENT_PATH" | sed 's/"/\\"/g')",
+    "document_size": $FILE_SIZE,
+    "token_estimate": $TOKEN_ESTIMATE,
     "context_size": $CONTEXT_SIZE,
     "timestamp": "$(date)"
 }
 EOF
-
-    # Copy document to cache location - this is the simplest and most reliable approach
-    cp "$DOCUMENT_PATH" "$CACHE_PATH"
-    echo "$(date): Document processed successfully" | tee -a "$LOG_FILE"
     
-    # Also create master cache
+    # Create master cache
     MASTER_CACHE="$HOME/cag_project/kv_caches/master_cache.bin"
-    cp "$DOCUMENT_PATH" "$MASTER_CACHE"
+    mkdir -p "$(dirname "$MASTER_CACHE")"
+    cp "$CACHE_PATH" "$MASTER_CACHE"
     cp "$CACHE_PATH.json" "$MASTER_CACHE.json"
-    echo "$(date): Created master cache at $MASTER_CACHE" | tee -a "$LOG_FILE"
+    
+    echo "Created master cache at $MASTER_CACHE" >> "$LOG_FILE"
+    echo "Processing complete at $(date)" >> "$LOG_FILE"
+    
+    # Print success message
+    echo "Document successfully processed"
+    echo "Estimated tokens: $TOKEN_ESTIMATE"
     
     exit 0
 else
-    echo "$(date): ERROR: Document not found: $DOCUMENT_PATH" | tee -a "$LOG_FILE"
+    echo "ERROR: Document not found: $DOCUMENT_PATH" | tee -a "$LOG_FILE"
     exit 1
 fi
