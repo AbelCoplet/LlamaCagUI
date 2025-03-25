@@ -58,30 +58,28 @@ class ChatTab(QWidget):
         # Model and KV cache info panel
         info_frame = QFrame()
         info_frame.setFrameShape(QFrame.StyledPanel)
-        info_frame.setStyleSheet("background-color: #F5F9FF;")
+        info_frame.setStyleSheet("background-color: #F5F9FF; color: #000000;")
         info_layout = QHBoxLayout(info_frame)
         
         # Current model info
         self.model_label = QLabel("Current Model: None")
-        self.model_label.setStyleSheet("color: #333333; font-weight: bold;")
+        self.model_label.setStyleSheet("color: #000000; font-weight: bold;")
+        self.model_label.setStyleSheet("font-weight: bold;")
         info_layout.addWidget(self.model_label)
         
         # KV cache toggle
         self.kv_cache_checkbox = QCheckBox("Use KV Cache")
         self.kv_cache_checkbox.setChecked(True)
-        self.kv_cache_checkbox.setStyleSheet("color: #333333;")
         info_layout.addWidget(self.kv_cache_checkbox)
         
         # Current KV cache info
         self.kv_cache_label = QLabel("Current KV Cache: None")
-        self.kv_cache_label.setStyleSheet("color: #333333;")
         info_layout.addWidget(self.kv_cache_label)
         
         info_layout.addStretch()
         
         # Temperature control
         temp_label = QLabel("Temperature:")
-        temp_label.setStyleSheet("color: #333333;")
         info_layout.addWidget(temp_label)
         
         self.temp_slider = QSlider(Qt.Horizontal)
@@ -92,12 +90,10 @@ class ChatTab(QWidget):
         info_layout.addWidget(self.temp_slider)
         
         self.temp_value = QLabel("0.7")
-        self.temp_value.setStyleSheet("color: #333333;")
         info_layout.addWidget(self.temp_value)
         
         # Max tokens
         max_tokens_label = QLabel("Max Tokens:")
-        max_tokens_label.setStyleSheet("color: #333333;")
         info_layout.addWidget(max_tokens_label)
         
         self.max_tokens_spin = QSpinBox()
@@ -117,7 +113,7 @@ class ChatTab(QWidget):
         self.chat_history.setReadOnly(True)
         self.chat_history.setMinimumHeight(300)
         self.chat_history.setStyleSheet(
-            "QTextEdit { background-color: white; border: 1px solid #ddd; color: #333333; }"
+            "QTextEdit { background-color: white; border: 1px solid #ddd; }"
         )
         chat_splitter.addWidget(self.chat_history)
         
@@ -131,7 +127,6 @@ class ChatTab(QWidget):
         self.message_input.setPlaceholderText("Type your message here...")
         self.message_input.setMinimumHeight(100)
         self.message_input.setMaximumHeight(200)
-        self.message_input.setStyleSheet("color: #333333;")
         input_layout.addWidget(self.message_input)
         
         # Button bar
@@ -164,13 +159,11 @@ class ChatTab(QWidget):
         status_layout = QHBoxLayout()
         
         self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("color: #333333;")
         status_layout.addWidget(self.status_label)
         
         status_layout.addStretch()
         
         self.token_count_label = QLabel("Tokens: 0")
-        self.token_count_label.setStyleSheet("color: #333333;")
         status_layout.addWidget(self.token_count_label)
         
         layout.addLayout(status_layout)
@@ -236,7 +229,7 @@ class ChatTab(QWidget):
         cursor.insertHtml(
             f'<div style="margin-top: 10px;">'
             f'<div style="font-weight: bold; color: #1976D2;">You:</div>'
-            f'<div style="background-color: #E3F2FD; border-radius: 5px; padding: 8px; margin: 5px 0px; color: #333333;">'
+            f'<div style="background-color: #E3F2FD; border-radius: 5px; padding: 8px; margin: 5px 0px;">'
             f'{message.replace("\n", "<br>")}'
             f'</div></div>'
         )
@@ -257,7 +250,7 @@ class ChatTab(QWidget):
         cursor.insertHtml(
             f'<div style="margin-top: 10px;">'
             f'<div style="font-weight: bold; color: #388E3C;">Assistant:</div>'
-            f'<div style="background-color: #F1F8E9; border-radius: 5px; padding: 8px; margin: 5px 0px; color: #333333;">'
+            f'<div style="background-color: #F1F8E9; border-radius: 5px; padding: 8px; margin: 5px 0px;">'
             f'{message.replace("\n", "<br>")}'
             f'</div></div>'
         )
@@ -404,7 +397,7 @@ class ChatTab(QWidget):
         cursor.insertHtml(
             f'<div style="margin-top: 10px;">'
             f'<div style="font-weight: bold; color: #388E3C;">Assistant:</div>'
-            f'<div id="current-response" style="background-color: #F1F8E9; border-radius: 5px; padding: 8px; margin: 5px 0px; color: #333333;">'
+            f'<div id="current-response" style="background-color: #F1F8E9; border-radius: 5px; padding: 8px; margin: 5px 0px;">'
             f'</div></div>'
         )
         
