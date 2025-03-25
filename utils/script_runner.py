@@ -1,80 +1,124 @@
 #!/usr/bin/env python3
 """
-Script runner utility for LlamaCag UI
-Provides functionality for running bash scripts with progress reporting.
+Utility for running external scripts with progress tracking
 """
+
 import os
-import sys
 import subprocess
+import time
 import logging
 import threading
-import time
-import re
-from typing import Optional, Callable, List, Tuple
-class ScriptProcess:
-    """Represents a running script process with its output and status"""
-    def __init__(self, command: List[str], returncode: int = 0, stdout: str = "", stderr: str = ""):
-        """Initialize script process"""
-        self.command = command
-        self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
-        # Calculate command string
-        if isinstance(command, list):
-            self.command_str = ' '.join(command)
-        else:
-            self.command_str = str(command)
-def run_script(command, progress_callback: Optional[Callable[[int], None]] = None,
-              timeout: int = 3600) -> ScriptProcess:
+from typing import List, Callable, Optional, Any
+
+def run_script(
+    command: List[str],
+    progress_callback: Optional[Callable[[int], Any]] = None,
+    timeout: int = 300
+) -> subprocess.CompletedProcess:
     """
-    Run a shell script or command with progress reporting
+    Run an external script and track its progress
+    
     Args:
-        command: Command to run (list or string)
-        progress_callback: Callback function for progress updates (0-100)
-        timeout: Timeout in seconds
+        command: List of command and arguments to run
+        progress_callback: Function to call with progress percentage (0-100)
+        timeout: Maximum time to wait for script completion (seconds)
+        
     Returns:
-        ScriptProcess object with command, returncode, stdout, stderr
+        CompletedProcess instance with returncode, stdout, and stderr
     """
-    # Convert command to string if it's a list
-    if isinstance(command, list):
-        cmd_str = ' '.join(command)
-    else:
-        cmd_str = str(command)
-        command = cmd_str.split()  # For the ScriptProcess object
-    # Create process
-    process = subprocess.Popen(
-        cmd_str,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        bufsize=1  # Line buffered
-    )
-    # Output buffers
-    stdout_lines = []
-    stderr_lines = []
-    # Progress pattern
-    progress_pattern = re.compile(r'PROGRESS:(\d+)')
-    # Last progress value
-    last_progress = 0
-    # Function to handle process output
-    def handle_output():
-        nonlocal last_progress
-        # Read stdout
-        for line in process.stdout:
-            stdout_lines.append(line)
-            # Check for progress indicator
-            if progress_callback:
-                progress_match = progress_pattern.search(line)
-                if progress_match:
-                    try:
-                        progress = int(progress_match.group(1))
-                        if progress != last_progress:
-                            progress_callback(progress)
-                            last_progress = progress
-                    except:
-                        pass
-        # Read stderr
-        for line in process.stderr:
-            stderr_lines.append(line)
-    # Start
+    try:
+        # Check if script exists
+        if not os.path.exists(command[0]):
+            logging.error(f"Script not found: {command[0]}")
+            raise FileNotFoundError(f"Script not found: {command[0]}")
+            
+        # Check if script is executable
+        if not os.access(command[0], os.X_OK):
+            logging.warning(f"Script is not executable: {command[0]}")
+            try:
+                os.chmod(command[0], 0o755)
+                logging.info(f"Set executable permission on {command[0]}")
+            except Exception as e:
+                logging.error(f"Failed to set executable permission: {e}")
+                raise PermissionError(f"Cannot execute script: {command[0]}")
+        
+        # Start the process
+        logging.info(f"Running script: {' '.join(command)}")
+        
+        # Create a process
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1  # Line buffered
+        )
+        
+        # Update progress
+        if progress_callback:
+            progress_callback(0)
+        
+        # Track progress in a separate thread
+        def progress_tracker():
+            start_time = time.time()
+            while process.poll() is None:
+                elapsed_time = time.time() - start_time
+                if timeout > 0:
+                    # Calculate progress based on elapsed time
+                    progress = min(int((elapsed_time / timeout) * 100), 99)
+                    if progress_callback:
+                        progress_callback(progress)
+                        
+                time.sleep(0.5)
+        
+        # Start progress tracker thread
+        progress_thread = threading.Thread(target=progress_tracker, daemon=True)
+        progress_thread.start()
+        
+        # Wait for process to complete
+        stdout, stderr = process.communicate(timeout=timeout)
+        
+        # Make sure progress thread is stopped
+        if progress_thread.is_alive():
+            progress_thread.join(1)
+            
+        # Update final progress
+        if progress_callback:
+            progress_callback(100)
+            
+        # Create CompletedProcess for compatibility
+        result = subprocess.CompletedProcess(
+            args=command,
+            returncode=process.returncode,
+            stdout=stdout,
+            stderr=stderr
+        )
+        
+        return result
+        
+    except subprocess.TimeoutExpired:
+        logging.error(f"Script execution timed out after {timeout} seconds")
+        if 'process' in locals():
+            process.kill()
+            stdout, stderr = process.communicate()
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=-1,
+                stdout=stdout,
+                stderr=f"Script execution timed out after {timeout} seconds\n{stderr}"
+            )
+        else:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=-1,
+                stdout="",
+                stderr=f"Script execution timed out after {timeout} seconds"
+            )
+    except Exception as e:
+        logging.error(f"Error running script: {e}")
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=-1,
+            stdout="",
+            stderr=f"Error running script: {str(e)}"
+        )
