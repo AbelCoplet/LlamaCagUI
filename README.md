@@ -23,11 +23,9 @@ This approach allows models like Gemma 3 and Llama 3 to leverage their 128K toke
 - **KV Cache Monitor**: Track and manage your document caches
 - **Settings**: Configure paths, model parameters, and application behavior
 
-```markdown
-# LlamaCag UI
+## Installation
 
-```markdown
-## Project Structure
+# LlamaCag UI Complete File Structure
 
 ```
 LlamaCagUI/
@@ -44,39 +42,44 @@ LlamaCagUI/
 ├── model_urls.txt           # List of model download URLs
 ├── .gitattributes           # Git attributes configuration
 ├── .gitignore               # Files to ignore in Git repository
-├── core/
+│
+├── core/                    # Core functionality components
 │   ├── __init__.py          # Package initialization
-│   ├── cache_manager.py         # Manages KV caches, including listing, purging and registry
-│   ├── chat_engine.py           # Handles chat interaction with models using KV caches
-│   ├── document_processor.py    # Processes documents into KV caches, estimates tokens
-│   ├── llama_manager.py         # Manages llama.cpp installation and updates
-│   ├── model_manager.py         # Handles model downloading, importing, and selection
-│   └── n8n_interface.py         # Interface for optional n8n workflow integration
-├── ui/
+│   ├── cache_manager.py     # Manages KV caches, including listing, purging and registry
+│   ├── chat_engine.py       # Handles chat interaction with models using KV caches
+│   ├── document_processor.py # Processes documents into KV caches, estimates tokens
+│   ├── llama_manager.py     # Manages llama.cpp installation and updates
+│   ├── model_manager.py     # Handles model downloading, importing, and selection
+│   └── n8n_interface.py     # Interface for optional n8n workflow integration
+│
+├── ui/                      # User interface components
 │   ├── __init__.py          # Package initialization
-│   ├── main_window.py           # Main application window with tabbed interface
-│   ├── model_tab.py             # UI for model management and downloading
-│   ├── document_tab.py          # UI for document processing and cache creation
-│   ├── chat_tab.py             # UI for chatting with documents
-│   ├── cache_tab.py             # UI for KV cache monitoring and management
-│   ├── settings_tab.py          # UI for application configuration
-│   ├── chat_tab.py.backup       # Backup of chat tab implementation
-│   └── components/              # Reusable UI components
-│       ├── __init__.py          # Package initialization
-│       └── toast.py             # Toast notification component for temporary messages
-├── utils/
+│   ├── main_window.py       # Main application window with tabbed interface
+│   ├── model_tab.py         # UI for model management and downloading
+│   ├── document_tab.py      # UI for document processing and cache creation
+│   ├── chat_tab.py          # UI for chatting with documents
+│   ├── chat_tab.py.backup   # Backup of chat tab implementation
+│   ├── cache_tab.py         # UI for KV cache monitoring and management
+│   ├── settings_tab.py      # UI for application configuration
+│   │
+│   └── components/          # Reusable UI components
+│       ├── __init__.py      # Package initialization
+│       └── toast.py         # Toast notification component for temporary messages
+│
+├── utils/                   # Utility functions
 │   ├── __init__.py          # Package initialization
-│   ├── config.py                # Configuration management for app settings
-│   ├── logging_utils.py         # Logging setup and utilities
-│   ├── script_runner.py         # Utility for running external scripts with progress tracking
-│   └── token_counter.py         # Utilities for estimating tokens in documents
-└── scripts/
+│   ├── config.py            # Configuration management for app settings
+│   ├── logging_utils.py     # Logging setup and utilities
+│   ├── script_runner.py     # Utility for running external scripts with progress tracking
+│   └── token_counter.py     # Utilities for estimating tokens in documents
+│
+└── scripts/                 # External scripts
     └── bash/
-        ├── create_kv_cache.sh   # Creates KV cache from a document for use with models
-        └── query_kv_cache.sh    # Queries a model with a document KV cache
+        ├── create_kv_cache.sh # Creates KV cache from a document for use with models
+        └── query_kv_cache.sh  # Queries a model with a document KV cache
 ```
 
-### Runtime-Created Directories (Not in Repository)
+## Runtime-Created Directories (Not in Repository)
 
 ```
 ~/.llamacag/                 # User configuration directory
@@ -100,57 +103,6 @@ LlamaCagUI/
 │   └── document_registry.json # Maps documents to caches
 └── temp_chunks/             # Temporary files used during processing
 ```
-
-### File Functionality Details
-
-#### Core Components
-
-* **`cache_manager.py`**: Manages all KV cache operations including listing available caches, retrieving cache details, updating usage statistics, and purging caches.
-* **`chat_engine.py`**: Handles the conversation with language models, manages context for chat history, and interfaces with the KV cache system to provide document context.
-* **`document_processor.py`**: Handles document analysis, token counting, and preparing documents for use with models by creating KV caches.
-* **`llama_manager.py`**: Manages the llama.cpp installation, checking versions, and handling updates. Ensures the inference engine is properly installed.
-* **`model_manager.py`**: Provides model discovery, downloads models from HuggingFace, manages model metadata, and allows switching between different models.
-* **`n8n_interface.py`**: Optional integration with n8n for workflow automation. Allows submitting documents and queries to external workflows.
-
-#### User Interface
-
-* **`main_window.py`**: The application's main window, integrating all tabs and managing global state.
-* **`model_tab.py`**: Provides the interface for Browse, downloading, and selecting models. Shows model details and recommendations.
-* **`document_tab.py`**: Allows selecting and processing documents into KV caches, shows document statistics and context fit.
-* **`chat_tab.py`**: Provides chat interface with message history, input controls, and response rendering.
-* **`cache_tab.py`**: Shows all available KV caches with metadata, allows selection and deletion.
-* **`settings_tab.py`**: Configure paths, performance parameters, and other application settings.
-* **`ui/components/toast.py`**: Toast notification component for displaying temporary messages.
-
-#### Scripts
-
-* **`scripts/bash/create_kv_cache.sh`**: Bash script that takes a document and creates a KV cache file. Handles document tokenization and preparation.
-* **`scripts/bash/query_kv_cache.sh`**: Bash script that combines a document KV cache with a user query to generate responses from the model.
-* **`run.sh`**: Script to run the application with the correct environment setup.
-* **`setup_requirements.sh`**: Installs all necessary Python dependencies and potentially other system-level requirements.
-* **`cleanup_and_fix.sh`**: Utility script to address common installation or configuration issues.
-* **`diagnose.sh`**: Script to perform checks and output information useful for troubleshooting.
-* **`reset.sh`**: Script to revert application settings to their default values.
-* **`debug_subprocess.py`**: Utility script that might be used for debugging issues related to running external processes.
-
-#### Utilities
-
-* **`utils/config.py`**: Loads and saves configuration from both `.env` file and user `config.json`.
-* **`utils/logging_utils.py`**: Sets up application logging with proper formatting and file rotation.
-* **`utils/script_runner.py`**: Safely executes external scripts with progress tracking and error handling.
-* **`utils/token_counter.py`**: Provides accurate token estimation for different document types to predict context window usage.
-
-#### Runtime Files
-
-* **`~/.llamacag/config.json`**: Stores user-specific application settings that persist between sessions.
-* **`~/.llamacag/custom_models.json`**: Allows users to define and use custom language models not included in the default list.
-* **`~/cag_project/kv_caches/cache_registry.json`**: Maintains a registry of all created KV cache files and their associated metadata.
-* **`~/cag_project/kv_caches/usage_registry.json`**: Tracks the usage statistics of different KV cache files, such as last accessed time.
-* **`~/cag_project/kv_caches/document_registry.json`**: Maps original document file paths to their corresponding processed KV cache files.
-
-This structure demonstrates the modular design of LlamaCag UI, separating core functionality, user interface, and utilities into distinct components.
-```
-## Installation
 
 ### Prerequisites
 
@@ -453,7 +405,6 @@ When processing a document:
 - [ ] Improved document content visualization
 
 ## License and Credits
-
 
 
 The application uses several open-source components:
