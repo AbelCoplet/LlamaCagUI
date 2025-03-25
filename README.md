@@ -26,9 +26,8 @@ This approach allows models like Gemma 3 and Llama 3 to leverage their 128K toke
 ```markdown
 # LlamaCag UI
 
+```markdown
 ## Project Structure
-
-Below is a comprehensive breakdown of all files in the LlamaCag UI project, explaining where they're stored and their purpose.
 
 ```
 LlamaCagUI/
@@ -78,8 +77,6 @@ LlamaCagUI/
 ```
 
 ### Runtime-Created Directories (Not in Repository)
-
-These directories are created by the application during runtime to store configuration, logs, and downloaded resources.
 
 ```
 ~/.llamacag/                 # User configuration directory
@@ -153,7 +150,6 @@ These directories are created by the application during runtime to store configu
 
 This structure demonstrates the modular design of LlamaCag UI, separating core functionality, user interface, and utilities into distinct components.
 ```
-
 ## Installation
 
 ### Prerequisites
