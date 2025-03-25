@@ -23,6 +23,14 @@ This approach allows models like Gemma 3 and Llama 3 to leverage their 128K toke
 - **KV Cache Monitor**: Track and manage your document caches
 - **Settings**: Configure paths, model parameters, and application behavior
 
+### Screenshots
+
+![Screenshot 2025-03-25 at 22.42.34](images/Screenshot%202025-03-25%20at%2022.42.34.png)
+![Screenshot 2025-03-25 at 22.42.41](images/Screenshot%202025-03-25%20at%2022.42.41.png)
+![Screenshot 2025-03-25 at 22.42.51](images/Screenshot%202025-03-25%20at%2022.42.51.png)
+![Screenshot 2025-03-25 at 22.42.56](images/Screenshot%202025-03-25%20at%2022.42.56.png)
+![Screenshot 2025-03-25 at 22.43.12](images/Screenshot%202025-03-25%20at%2022.43.12.png)
+
 ## Installation
 
 # LlamaCag UI Complete File Structure
