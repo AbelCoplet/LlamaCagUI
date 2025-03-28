@@ -1,0 +1,7 @@
+Gemma 3 4B Instruct: https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/blob/main/gemma-3-4b-it-Q4_K_M.gguf
+Filename: gemma-3-4b-it-Q4_K_M.gguf
+Direct download: https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf
+
+Gemma 3 4B Base: https://huggingface.co/bartowski/google_gemma-3-4b-GGUF/blob/main/gemma-3-4b.Q4_K_M.gguf
+Filename: gemma-3-4b.Q4_K_M.gguf
+Direct download: https://huggingface.co/bartowski/google_gemma-3-4b-GGUF/resolve/main/gemma-3-4b.Q4_K_M.gguf

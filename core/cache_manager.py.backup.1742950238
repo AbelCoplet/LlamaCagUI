@@ -1,0 +1,329 @@
+#!/usr/bin/env python3
+"""
+KV cache management for LlamaCag UI
+Manages KV caches for large context window models.
+"""
+import os
+import sys
+import logging
+import json
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+from PyQt5.QtCore import QObject, pyqtSignal
+
+class CacheManager(QObject):
+    """Manages KV caches for large context window models"""
+    # Signals
+    cache_list_updated = pyqtSignal()
+    cache_purged = pyqtSignal(str, bool)  # cache_path, success
+
+    def __init__(self, config):
+        """Initialize cache manager"""
+        super().__init__()
+        self.config = config
+        
+        # Resolve home directory explicitly to avoid path expansion issues
+        home_dir = os.path.expanduser("~")
+        kv_cache_path = config.get('LLAMACPP_KV_CACHE_DIR', os.path.join(home_dir, 'cag_project', 'kv_caches'))
+        
+        # Convert to absolute path if it's not already
+        if not os.path.isabs(kv_cache_path):
+            if '~' in kv_cache_path:
+                kv_cache_path = os.path.expanduser(kv_cache_path)
+            else:
+                kv_cache_path = os.path.abspath(kv_cache_path)
+        
+        self.kv_cache_dir = Path(kv_cache_path)
+        print(f"KV cache directory set to: {self.kv_cache_dir}")
+        
+        # Ensure directory exists
+        self.kv_cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Cache registry
+        self._cache_registry = {} # Maps cache_path -> {metadata}
+        self._usage_registry = {} # Maps cache_path -> {usage_stats}
+        
+        # Load registries
+        self._load_registries()
+
+    def _load_registries(self):
+        """Load cache and usage registries from disk"""
+        registry_file = self.kv_cache_dir / 'cache_registry.json'
+        usage_file = self.kv_cache_dir / 'usage_registry.json'
+
+        # Create empty registry files if they don't exist
+        if not registry_file.exists():
+            with open(registry_file, 'w') as f:
+                f.write("{}")
+                
+        if not usage_file.exists():
+            with open(usage_file, 'w') as f:
+                f.write("{}")
+
+        try:
+            with open(registry_file, 'r') as f:
+                self._cache_registry = json.load(f)
+            print(f"Loaded cache registry with {len(self._cache_registry)} entries")
+        except Exception as e:
+            print(f"Failed to load cache registry: {str(e)}")
+            self._cache_registry = {} # Reset on error
+
+        try:
+            with open(usage_file, 'r') as f:
+                self._usage_registry = json.load(f)
+            print(f"Loaded usage registry with {len(self._usage_registry)} entries")
+        except Exception as e:
+            print(f"Failed to load usage registry: {str(e)}")
+            self._usage_registry = {} # Reset on error
+
+    def _save_registries(self):
+        """Save cache and usage registries to disk"""
+        registry_file = self.kv_cache_dir / 'cache_registry.json'
+        usage_file = self.kv_cache_dir / 'usage_registry.json'
+
+        try:
+            with open(registry_file, 'w') as f:
+                json.dump(self._cache_registry, f, indent=2)
+        except Exception as e:
+            print(f"Failed to save cache registry: {str(e)}")
+
+        try:
+            with open(usage_file, 'w') as f:
+                json.dump(self._usage_registry, f, indent=2)
+        except Exception as e:
+            print(f"Failed to save usage registry: {str(e)}")
+
+    def refresh_cache_list(self):
+        """Update registry by checking if files exist - NO DIRECTORY SCANNING"""
+        print(f"Checking registry entries against actual files (NO DIRECTORY SCANNING)")
+        
+        # Simply check if registered files still exist
+        removed_caches = False
+        for registered_path in list(self._cache_registry.keys()):
+            path_obj = Path(registered_path)
+            if not path_obj.exists():
+                print(f"Removing registry entry for missing file: {registered_path}")
+                del self._cache_registry[registered_path]
+                if registered_path in self._usage_registry:
+                    del self._usage_registry[registered_path]
+                removed_caches = True
+
+        if removed_caches:
+            self._save_registries()
+            
+        # Signal update
+        self.cache_list_updated.emit()
+
+    def get_cache_list(self) -> List[Dict]:
+        """Get list of available KV caches from the registry"""
+        cache_list = []
+        # Iterate through registered caches
+        for cache_path_str, registry_info in self._cache_registry.items():
+            file_path = Path(cache_path_str)
+            # Ensure file still exists before adding to list
+            if not file_path.exists():
+                continue
+
+            usage_info = self._usage_registry.get(cache_path_str, {})
+            try:
+                file_stat = file_path.stat()
+                cache_info = {
+                    'id': registry_info.get('document_id', file_path.stem),
+                    'path': cache_path_str,
+                    'filename': file_path.name,
+                    'size': file_stat.st_size,
+                    'last_modified': file_stat.st_mtime,
+                    'document_id': registry_info.get('document_id', file_path.stem),
+                    'original_file_path': registry_info.get('original_file_path', ''),
+                    'context_size': registry_info.get('context_size', 0),
+                    'token_count': registry_info.get('token_count', 0),
+                    'model_id': registry_info.get('model_id', ''),
+                    'created_at': registry_info.get('created_at', None),
+                    'last_used': usage_info.get('last_used', None),
+                    'usage_count': usage_info.get('usage_count', 0),
+                    'is_master': registry_info.get('is_master', False)
+                }
+                cache_list.append(cache_info)
+            except Exception as e:
+                print(f"Could not get info for cache file {cache_path_str}: {e}")
+
+        # Sort list by last used or creation date
+        cache_list.sort(key=lambda x: x.get('last_used') or x.get('created_at') or 0, reverse=True)
+
+        return cache_list
+
+    def get_cache_info(self, cache_path_str: str) -> Optional[Dict]:
+        """Get detailed information about a KV cache from the registry"""
+        if cache_path_str not in self._cache_registry:
+            return None
+
+        registry_info = self._cache_registry[cache_path_str]
+        usage_info = self._usage_registry.get(cache_path_str, {})
+        file_path = Path(cache_path_str)
+
+        if not file_path.exists():
+            return None
+
+        try:
+            file_stat = file_path.stat()
+            cache_info = {
+                'id': registry_info.get('document_id', file_path.stem),
+                'path': cache_path_str,
+                'filename': file_path.name,
+                'size': file_stat.st_size,
+                'last_modified': file_stat.st_mtime,
+                'document_id': registry_info.get('document_id', file_path.stem),
+                'original_file_path': registry_info.get('original_file_path', ''),
+                'context_size': registry_info.get('context_size', 0),
+                'token_count': registry_info.get('token_count', 0),
+                'model_id': registry_info.get('model_id', ''),
+                'created_at': registry_info.get('created_at', None),
+                'last_used': usage_info.get('last_used', None),
+                'usage_count': usage_info.get('usage_count', 0),
+                'is_master': registry_info.get('is_master', False)
+            }
+            return cache_info
+        except Exception as e:
+            print(f"Could not get info for cache file {cache_path_str}: {e}")
+            return None
+
+    def register_cache(self, document_id: str, cache_path: str, context_size: int,
+                       token_count: int = 0, original_file_path: str = "", model_id: str = "", 
+                       is_master: bool = False) -> bool:
+        """Register a KV cache in the registry with detailed info"""
+        path_obj = Path(cache_path)
+        if not path_obj.exists() or path_obj.suffix != '.llama_cache':
+            print(f"Cannot register invalid or non-existent cache: {cache_path}")
+            return False
+
+        cache_path_str = str(path_obj)
+        self._cache_registry[cache_path_str] = {
+            'document_id': document_id,
+            'original_file_path': original_file_path,
+            'context_size': context_size,
+            'token_count': token_count,
+            'model_id': model_id,
+            'created_at': time.time(),
+            'is_master': is_master
+        }
+        
+        # Ensure usage entry exists
+        if cache_path_str not in self._usage_registry:
+             self._usage_registry[cache_path_str] = {'last_used': None, 'usage_count': 0}
+
+        self._save_registries()
+        self.cache_list_updated.emit()
+        return True
+
+    def update_usage_by_path(self, cache_path_str: str) -> bool:
+        """Update usage statistics for a KV cache using its path"""
+        if cache_path_str not in self._cache_registry:
+            print(f"Cannot update usage, cache path not found: {cache_path_str}")
+            return False
+
+        # Update usage registry
+        usage_info = self._usage_registry.get(cache_path_str, {'usage_count': 0})
+        usage_info['last_used'] = time.time()
+        usage_info['usage_count'] = usage_info.get('usage_count', 0) + 1
+        self._usage_registry[cache_path_str] = usage_info
+
+        self._save_registries()
+        self.cache_list_updated.emit()
+        return True
+
+    def purge_cache(self, cache_path_str: str) -> bool:
+        """Purge a KV cache file and its registry entries"""
+        path_obj = Path(cache_path_str)
+        file_existed = path_obj.exists()
+
+        try:
+            if file_existed:
+                path_obj.unlink()
+                print(f"Deleted cache file: {cache_path_str}")
+
+            # Remove from registries
+            registry_updated = False
+            if cache_path_str in self._cache_registry:
+                del self._cache_registry[cache_path_str]
+                registry_updated = True
+            if cache_path_str in self._usage_registry:
+                del self._usage_registry[cache_path_str]
+                registry_updated = True
+
+            if registry_updated:
+                self._save_registries()
+
+            self.cache_purged.emit(cache_path_str, True)
+            self.cache_list_updated.emit()
+            return True
+        except Exception as e:
+            print(f"Failed to purge cache {cache_path_str}: {str(e)}")
+            self.cache_purged.emit(cache_path_str, False)
+            self.cache_list_updated.emit()
+            return False
+
+    def purge_all_caches(self) -> bool:
+        """Purge all KV cache files and clear registries"""
+        print("Purging all KV caches...")
+        success = True
+        
+        # First, purge all registered caches
+        for cache_path_str in list(self._cache_registry.keys()):
+            if not self.purge_cache(cache_path_str):
+                success = False
+        
+        # Explicitly clear registries
+        self._cache_registry = {}
+        self._usage_registry = {}
+        self._save_registries()
+        
+        self.cache_list_updated.emit()
+        return success
+
+    def get_total_cache_size(self) -> int:
+        """Get the total size of all registered KV caches in bytes"""
+        total_size = 0
+        for cache_path_str in self._cache_registry.keys():
+            path_obj = Path(cache_path_str)
+            if path_obj.exists():
+                try:
+                    total_size += path_obj.stat().st_size
+                except Exception as e:
+                    print(f"Could not get size for {path_obj}: {e}")
+        return total_size
+
+    def check_cache_compatibility(self, model_context_size: int) -> List[str]:
+        """Check which caches might be incompatible with the given model context size"""
+        incompatible_caches = []
+        for cache_path_str, registry_info in self._cache_registry.items():
+            cache_creation_context = registry_info.get('context_size', 0)
+            if cache_creation_context > model_context_size:
+                incompatible_caches.append(cache_path_str)
+        return incompatible_caches
+
+    def update_config(self, config):
+        """Update configuration and reload registries if path changed"""
+        self.config = config
+        
+        # Resolve home directory explicitly
+        home_dir = os.path.expanduser("~")
+        new_kv_cache_path = config.get('LLAMACPP_KV_CACHE_DIR', os.path.join(home_dir, 'cag_project', 'kv_caches'))
+        
+        # Convert to absolute path if it's not already
+        if not os.path.isabs(new_kv_cache_path):
+            if '~' in new_kv_cache_path:
+                new_kv_cache_path = os.path.expanduser(new_kv_cache_path)
+            else:
+                new_kv_cache_path = os.path.abspath(new_kv_cache_path)
+        
+        new_kv_cache_dir = Path(new_kv_cache_path)
+        
+        if new_kv_cache_dir != self.kv_cache_dir:
+            print(f"KV Cache directory changed to: {new_kv_cache_dir}. Reloading registries.")
+            self.kv_cache_dir = new_kv_cache_dir
+            self.kv_cache_dir.mkdir(parents=True, exist_ok=True)
+            self._load_registries()
+            self.refresh_cache_list()
+        else:
+            print("CacheManager configuration updated (path unchanged).")

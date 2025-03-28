@@ -30,59 +30,75 @@ class ModelManager(QObject):
     model_list_updated = pyqtSignal()
     import_complete = pyqtSignal(bool, str)  # success, message
     
-    # Known large context window models
+    # Known large context window models with verified URLs
     KNOWN_MODELS = {
         "gemma-3-4b-128k": {
             "name": "Gemma 3 4B",
-            "url": "https://huggingface.co/bartowski/gemma-4b-GGUF/resolve/main/gemma-4b-q4_k_m.gguf",
-            "filename": "gemma-3-4b-128k.gguf",
+            "url": "https://huggingface.co/bartowski/google_gemma-3-4b-GGUF/resolve/main/gemma-3-4b.Q4_K_M.gguf",
+            "filename": "gemma-3-4b.Q4_K_M.gguf",
             "context_window": 128000,
             "parameters": "4 billion",
             "quantization": "Q4_K_M",
             "description": "Google's smaller Gemma model, optimized for 128K context"
         },
-        "deepseek-r1-7b-128k": {
-            "name": "DeepSeek R1 7B",
-            "url": "https://huggingface.co/TheBloke/deepseek-r1-7B-GGUF/resolve/main/deepseek-r1-7b.Q4_K_M.gguf",
-            "filename": "deepseek-r1-7b-128k.gguf",
+        "gemma-3-4b-it-Q4_K_M": {
+            "name": "Gemma 3 4B Instruct",
+            "url": "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf",
+            "filename": "gemma-3-4b-it-Q4_K_M.gguf",
             "context_window": 128000,
-            "parameters": "7 billion",
+            "parameters": "4 billion",
             "quantization": "Q4_K_M",
-            "description": "DeepSeek's R1 model with 128K context window"
+            "description": "Google's instruction-tuned Gemma 3 with 128K context (Recommended Default)" # Added recommendation
         },
-        "mistral-large-2-7b-128k": {
-            "name": "Mistral Large 2 7B",
-            "url": "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
-            "filename": "mistral-large-2-7b-128k.gguf",
+        "gemma-3-4b-it-Q5_K_M": {
+            "name": "Gemma 3 4B Instruct (High Quality)",
+            "url": "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q5_K_M.gguf",
+            "filename": "gemma-3-4b-it-Q5_K_M.gguf",
             "context_window": 128000,
-            "parameters": "7 billion",
-            "quantization": "Q4_K_M",
-            "description": "Mistral's Large 2 model with strong reasoning"
+            "parameters": "4 billion",
+            "quantization": "Q5_K_M",
+            "description": "Google's instruction-tuned Gemma 3 with higher quality"
         },
-        "llama3-8b-128k": {
-            "name": "Llama 3 8B",
-            "url": "https://huggingface.co/TheBloke/Llama-3-8B-GGUF/resolve/main/llama-3-8b.Q4_K_M.gguf",
-            "filename": "llama3-8b-128k.gguf",
+        "llama-3-8b-instruct-Q4_K_M": {
+            "name": "Llama 3 8B Instruct",
+            "url": "https://huggingface.co/TheBloke/Llama-3-8B-Instruct-GGUF/resolve/main/llama-3-8b-instruct.Q4_K_M.gguf",
+            "filename": "llama-3-8b-instruct.Q4_K_M.gguf",
             "context_window": 128000,
             "parameters": "8 billion",
             "quantization": "Q4_K_M",
-            "description": "Meta's Llama 3 model with 128K context"
-        }
+            "description": "Meta's Llama 3 instruction-tuned model"
+        },
+        "mistral-7b-instruct-Q4_K_M": {
+            "name": "Mistral 7B Instruct",
+            "url": "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
+            "filename": "mistral-7b-instruct-v0.2.Q4_K_M.gguf",
+            "context_window": 128000,
+            "parameters": "7 billion",
+            "quantization": "Q4_K_M",
+            "description": "Mistral's instruction-tuned model with strong reasoning"
+        },
     }
     
     def __init__(self, config):
         """Initialize model manager"""
         super().__init__()
         self.config = config
-        self.models_dir = Path(os.path.expanduser(config.get('LLAMACPP_MODEL_DIR', '')))
         
-        # Create models directory if it doesn't exist
-        if not self.models_dir or not self.models_dir.exists():
+        # Get models directory from config
+        models_dir = config.get('LLAMACPP_MODEL_DIR', '')
+        if models_dir:
+            self.models_dir = Path(os.path.expanduser(models_dir))
+        else:
             # Default to models directory in llamacpp path
             llamacpp_path = Path(os.path.expanduser(config.get('LLAMACPP_PATH', '~/Documents/llama.cpp')))
             self.models_dir = llamacpp_path / 'models'
-            self.models_dir.mkdir(parents=True, exist_ok=True)
-            
+        
+        # Ensure models directory exists
+        os.makedirs(self.models_dir, exist_ok=True)
+        
+        # Log the models directory for debugging
+        logging.info(f"Models directory is: {self.models_dir}")
+        
         # Cache for model metadata
         self._model_metadata = {}
         
@@ -111,30 +127,52 @@ class ModelManager(QObject):
         """Get list of available models on disk"""
         available_models = []
         
-        for file in self.models_dir.glob("*.gguf"):
-            model_id = self._get_model_id_from_filename(file.name)
+        try:
+            # Ensure models directory exists
+            os.makedirs(self.models_dir, exist_ok=True)
             
-            # Get metadata if available in known models
-            metadata = self.KNOWN_MODELS.get(model_id, {})
+            # Log for debugging
+            logging.info(f"Scanning models directory: {self.models_dir}")
             
-            # Basic metadata from filename
-            model_info = {
-                "id": model_id,
-                "name": metadata.get("name", file.name),
-                "path": str(file),
-                "filename": file.name,
-                "size": file.stat().st_size,
-                "context_window": metadata.get("context_window", 128000),  # Default to 128K
-                "parameters": metadata.get("parameters", "Unknown"),
-                "quantization": metadata.get("quantization", "Unknown"),
-                "description": metadata.get("description", ""),
-                "last_modified": file.stat().st_mtime
-            }
+            # Get all .gguf files in the models directory
+            gguf_files = list(self.models_dir.glob("*.gguf"))
+            logging.info(f"Found {len(gguf_files)} .gguf files: {[f.name for f in gguf_files]}")
             
-            available_models.append(model_info)
-            
-            # Cache metadata for future use
-            self._model_metadata[model_id] = model_info
+            # Scan all files in the models directory
+            for file in gguf_files:
+                # Filter out non-model gguf files (e.g., vocab files)
+                if file.name.startswith("ggml-vocab-"):
+                    logging.debug(f"Skipping non-model file: {file.name}")
+                    continue
+
+                model_id = self._get_model_id_from_filename(file.name)
+
+                # Get metadata if available in known models
+                metadata = self.KNOWN_MODELS.get(model_id, {})
+                
+                # Basic metadata from filename
+                model_info = {
+                    "id": model_id,
+                    "name": metadata.get("name", file.name),
+                    "path": str(file),
+                    "filename": file.name,
+                    "size": file.stat().st_size,
+                    "context_window": metadata.get("context_window", 128000),  # Default to 128K
+                    "parameters": metadata.get("parameters", "Unknown"),
+                    "quantization": metadata.get("quantization", "Unknown"),
+                    "description": metadata.get("description", ""),
+                    "last_modified": file.stat().st_mtime
+                }
+                
+                available_models.append(model_info)
+                
+                # Cache metadata for future use
+                self._model_metadata[model_id] = model_info
+                
+            # Log the found models
+            logging.info(f"Found {len(available_models)} models in {self.models_dir}")
+        except Exception as e:
+            logging.error(f"Error scanning models directory: {str(e)}")
         
         return available_models
     
@@ -175,36 +213,53 @@ class ModelManager(QObject):
         # Check known models
         if model_id in self.KNOWN_MODELS:
             return self.KNOWN_MODELS[model_id]
+        
+        # Try to find by filename for models that might have been added manually
+        expected_filename = f"{model_id}.gguf"
+        model_path = self.models_dir / expected_filename
+        
+        # If the exact filename doesn't exist, try to find any gguf file with this model_id in the name
+        if not model_path.exists():
+            for file in self.models_dir.glob("*.gguf"):
+                if model_id.lower() in file.name.lower():
+                    model_path = file
+                    break
             
         # Check if file exists
-        model_file = self.models_dir / f"{model_id}.gguf"
-        if model_file.exists():
+        if model_path.exists():
             # Basic info from file
             info = {
                 "id": model_id,
                 "name": model_id,
-                "path": str(model_file),
-                "filename": model_file.name,
-                "size": model_file.stat().st_size,
+                "path": str(model_path),
+                "filename": model_path.name,
+                "size": model_path.stat().st_size,
                 "context_window": 128000,  # Default assumption for CAG models
                 "parameters": "Unknown",
                 "quantization": "Unknown",
                 "description": "",
-                "last_modified": model_file.stat().st_mtime
+                "last_modified": model_path.stat().st_mtime
             }
             return info
             
         return None
     
-    def download_model(self, model_id: str):
+    def download_model(self, model_id: str, url: Optional[str] = None):
         """Download a model by ID"""
-        if model_id not in self.KNOWN_MODELS:
-            self.download_complete.emit(model_id, False, f"Unknown model ID: {model_id}")
-            return
-            
-        model_info = self.KNOWN_MODELS[model_id]
-        url = model_info.get("url")
-        filename = model_info.get("filename")
+        if not url:
+            if model_id not in self.KNOWN_MODELS:
+                self.download_complete.emit(model_id, False, f"Unknown model ID: {model_id}")
+                return
+                
+            model_info = self.KNOWN_MODELS[model_id]
+            url = model_info.get("url")
+            filename = model_info.get("filename")
+        else:
+            # Try to extract filename from URL if not in known models
+            if model_id in self.KNOWN_MODELS:
+                filename = self.KNOWN_MODELS[model_id].get("filename")
+            else:
+                filename = os.path.basename(url)
         
         if not url or not filename:
             self.download_complete.emit(model_id, False, "Missing URL or filename in model info")
@@ -250,6 +305,9 @@ class ModelManager(QObject):
                             if progress != last_update:
                                 self.download_progress.emit(model_id, progress)
                                 last_update = progress
+            
+            # Ensure the models directory exists
+            os.makedirs(self.models_dir, exist_ok=True)
             
             # Move to final location
             shutil.move(temp_file, target_path)
@@ -356,3 +414,64 @@ class ModelManager(QObject):
             
         except Exception as e:
             logging.error(f"Failed to save custom model: {str(e)}")
+    
+    def check_for_llama_cpp_updates(self) -> bool:
+        """Check if updates are available for llama.cpp"""
+        try:
+            # Get path from config
+            llamacpp_path = Path(os.path.expanduser(self.config.get('LLAMACPP_PATH', '~/Documents/llama.cpp')))
+            
+            # Run git fetch to get latest changes
+            subprocess.run(
+                f"cd {llamacpp_path} && git fetch",
+                shell=True, check=True, capture_output=True
+            )
+            
+            # Check if local is behind remote
+            result = subprocess.run(
+                f"cd {llamacpp_path} && git status -uno",
+                shell=True, check=True, capture_output=True, text=True
+            )
+            
+            return "Your branch is behind" in result.stdout
+        except Exception as e:
+            logging.error(f"Error checking for llama.cpp updates: {str(e)}")
+            return False
+    
+    def update_llama_cpp(self) -> Tuple[bool, str]:
+        """Update llama.cpp to the latest version"""
+        try:
+            # Get path from config
+            llamacpp_path = Path(os.path.expanduser(self.config.get('LLAMACPP_PATH', '~/Documents/llama.cpp')))
+            
+            # Pull latest changes
+            pull_result = subprocess.run(
+                f"cd {llamacpp_path} && git pull",
+                shell=True, check=True, capture_output=True, text=True
+            )
+            
+            # Rebuild
+            build_result = subprocess.run(
+                f"cd {llamacpp_path} && cmake --build build -j {os.cpu_count() or 4}",
+                shell=True, check=True, capture_output=True, text=True
+            )
+            
+            return True, "Updated successfully"
+        except Exception as e:
+            logging.error(f"Error updating llama.cpp: {str(e)}")
+            return False, f"Update failed: {str(e)}"
+            
+    def update_config(self, config):
+        """Update configuration"""
+        self.config = config
+        new_models_dir = config.get('LLAMACPP_MODEL_DIR', '')
+        if new_models_dir:
+            self.models_dir = Path(os.path.expanduser(new_models_dir))
+        else:
+            # Default to models directory in llamacpp path
+            llamacpp_path = Path(os.path.expanduser(config.get('LLAMACPP_PATH', '~/Documents/llama.cpp')))
+            self.models_dir = llamacpp_path / 'models'
+            
+        # Ensure models directory exists
+        os.makedirs(self.models_dir, exist_ok=True)
+        logging.info(f"Updated models directory to: {self.models_dir}")
