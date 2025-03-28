@@ -1,10 +1,8 @@
 ### Screenshots
-
-![Screenshot 2025-03-25 at 22.42.34](images/Screenshot%202025-03-25%20at%2022.42.34.png)
-![Screenshot 2025-03-25 at 22.42.41](images/Screenshot%202025-03-25%20at%2022.42.41.png)
-![Screenshot 2025-03-25 at 22.42.51](images/Screenshot%202025-03-25%20at%2022.42.51.png)
-![Screenshot 2025-03-25 at 22.42.56](images/Screenshot%202025-03-25%20at%2022.42.56.png)
-![Screenshot 2025-03-25 at 22.43.12](images/Screenshot%202025-03-25%20at%2022.43.12.png)
+![Welcome Screen](https://github.com/AbelCoplet/LlamaCagUI/blob/main/images/welcomescreen.png)
+![Document Processor](https://github.com/AbelCoplet/LlamaCagUI/blob/main/images/documentprocessor.png)
+![Main Chat](https://github.com/AbelCoplet/LlamaCagUI/blob/main/images/mainchat.png)
+![Model Select](https://github.com/AbelCoplet/LlamaCagUI/blob/main/images/modelselect.png)
 
 LlamaCag UI Enhancement Plan
 
@@ -51,10 +49,9 @@ LlamaCagUI/
     ├── [All backup files]
     └── [All diagnostic and fix scripts]
 ```
+disregard the fixes folder, it's not used yet, it contains artifacts from debugging. you do not have to use or pull it.
 
 # LlamaCag UI
-
-![LlamaCag Logo](https://via.placeholder.com/800x200?text=LlamaCag+UI)
 
 ## Context-Augmented Generation for Large Language Models
 
